@@ -5,14 +5,9 @@ from rest_framework.response import Response
 from .models import Monitor
 from django.db.models.functions import Cast
 from .serializers import MonitorSerializer,CheckResultSerializer
-from django.db.models import (
-    Count,
-    Avg,
-    Sum,
-    Min,
-    Max,
-    IntegerField
-)
+from django.db.models import (Count, Avg,Sum, Min, Max,IntegerField)
+from .services import process_monitor
+
 
 
 class MonitorViewSet(ModelViewSet):
@@ -80,6 +75,17 @@ class MonitorViewSet(ModelViewSet):
         return Response(
             stats
         )
+    
+    @action(methods=["post"],detail=True)
+    def monitorUrl(self,request,pk=None):
+        monitor = self.get_object()
+
+        process_monitor(monitor)
+
+        return Response({
+            "msg" : "monitor checked successfully"
+        })
+        
 
         
 
