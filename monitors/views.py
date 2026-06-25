@@ -7,6 +7,7 @@ from django.db.models.functions import Cast
 from .serializers import MonitorSerializer,CheckResultSerializer
 from django.db.models import (Count, Avg,Sum, Min, Max,IntegerField)
 from .services import process_monitor
+from .tasks import process_monitor_task
 
 
 
@@ -80,10 +81,13 @@ class MonitorViewSet(ModelViewSet):
     def monitorUrl(self,request,pk=None):
         monitor = self.get_object()
 
-        process_monitor(monitor)
+        process_monitor_task.delay(
+            monitor.id
+        )
+       
 
         return Response({
-            "msg" : "monitor checked successfully"
+           "msg": "monitor check queued successfully"
         })
         
 

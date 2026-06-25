@@ -2,6 +2,7 @@ import requests
 from .models import CheckResult,Monitor,Incident
 from datetime import timedelta
 
+
 def process_monitor(monitor):
     result = check_monitor(monitor)
 
@@ -15,9 +16,14 @@ def process_monitor(monitor):
         check_result
     )
 
-    create_incident(
+    event = create_incident(
         monitor,
         check_result
+    )
+
+    email_alerts(
+        monitor,
+        event
     )
 
 
@@ -88,6 +94,7 @@ def create_incident(monitor,result):
                 monitor = monitor,
                 started_at = result.checked_at
             )
+            return "DOWN"
     
 
     else:
@@ -95,5 +102,24 @@ def create_incident(monitor,result):
            incident.resolved_at = result.checked_at
            incident.is_resolved = True
            incident.save(update_fields=["resolved_at","is_resolved"])
+           return "RECOVERED"
+    
+    return None
+
+VALID_EVENTS = {
+    "DOWN",
+    "RECOVERED"
+}
+
+def email_alerts(monitor, event):
+    print("bhaaaaaag")
+    from .tasks import send_email
+    if event in VALID_EVENTS:
+        send_email.delay(
+            monitor.id,
+            event
+        )
+
+
 
     
