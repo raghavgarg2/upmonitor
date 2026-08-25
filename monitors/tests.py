@@ -1,12 +1,14 @@
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.conf import settings
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from .models import Incident, Monitor
 from .services import process_monitor
+from .tasks import send_email
 
 
 class MonitorLifecycleTests(TestCase):
@@ -107,3 +109,26 @@ class MonitorApiTests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id"], self.owner_incident.id)
         self.assertEqual(response.data[0]["monitor_name"], "API monitor")
+
+
+class EmailTaskTests(TestCase):
+    def setUp(self):
+        owner = User.objects.create_user(
+            username="email-owner",
+            email="owner@example.com",
+        )
+        self.monitor = Monitor.objects.create(
+            owner=owner,
+            name="Email monitor",
+            url="https://example.com",
+        )
+
+    @patch("monitors.tasks.send_mail")
+    def test_down_alert_uses_the_configured_sender(self, mocked_send_mail):
+        send_email.run(self.monitor.id, "DOWN")
+
+        mocked_send_mail.assert_called_once()
+        kwargs = mocked_send_mail.call_args.kwargs
+        self.assertEqual(kwargs["from_email"], settings.DEFAULT_FROM_EMAIL)
+        self.assertEqual(kwargs["recipient_list"], ["owner@example.com"])
+        self.assertIn("Monitor Down", kwargs["subject"])

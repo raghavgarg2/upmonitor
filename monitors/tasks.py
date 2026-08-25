@@ -1,24 +1,22 @@
-
-
 from celery import shared_task
-from .models import Monitor
-from .services import process_monitor
-from django.utils import timezone
+from django.conf import settings
 from django.core.mail import send_mail
 from django.db.models import Q
+from django.utils import timezone
 
-
-@shared_task
-def test_tast():
-    print("hellle")
+from .models import Monitor
+from .services import process_monitor
 
 
 @shared_task
 def process_monitor_task(monitor_id):
-    monitor = Monitor.objects.get(
-        id = monitor_id
-    )
+    try:
+        monitor = Monitor.objects.get(id=monitor_id)
+    except Monitor.DoesNotExist:
+        return
+
     process_monitor(monitor)
+
 
 @shared_task
 def check_due_monitors():
@@ -27,62 +25,47 @@ def check_due_monitors():
     )
 
     for monitor in monitors:
-        process_monitor_task.delay(
-            monitor.id
-        )
+        process_monitor_task.delay(monitor.id)
 
 
 @shared_task
-def send_email(monitor_id,event):
-    print("helleeeeeeeee")
-    monitor = Monitor.objects.select_related("owner").get(id = monitor_id)
+def send_email(monitor_id, event):
+    try:
+        monitor = Monitor.objects.select_related("owner").get(id=monitor_id)
+    except Monitor.DoesNotExist:
+        return
+
+    if not monitor.owner.email:
+        return
+
     if event == "RECOVERED":
-
-        subject = (
-          f"[Uptime Monitor] "
-          f"Monitor Recovered: {monitor.name}"
-    )
-
+        subject = f"[Uptime Monitor] Monitor Recovered: {monitor.name}"
         message = (
-          f"Your monitor has recovered and is now UP.\n\n"
-          f"Monitor: {monitor.name}\n"
-          f"URL: {monitor.url}\n\n"
-          f"Recovered At: {timezone.now()}\n\n"
-          f"The endpoint is responding "
-          f"successfully again.\n\n"
-          f"Uptime Monitor"
-    )
-
-    
+            "Your monitor has recovered and is now UP.\n\n"
+            f"Monitor: {monitor.name}\n"
+            f"URL: {monitor.url}\n\n"
+            f"Recovered at: {timezone.now()}\n\n"
+            "The endpoint is responding successfully again.\n\n"
+            "Uptime Monitor"
+        )
     elif event == "DOWN":
-        subject = (
-          f"[Uptime Monitor] "
-          f"Monitor Down: {monitor.name}"
-    )
-
+        subject = f"[Uptime Monitor] Monitor Down: {monitor.name}"
         message = (
-          f"Your monitor has been detected as DOWN.\n\n"
-          f"Monitor: {monitor.name}\n"
-          f"URL: {monitor.url}\n\n"
-          f"Detected At: {timezone.now()}\n\n"
-          f"Our monitoring system will continue "
-          f"checking the endpoint and notify "
-          f"you once it recovers.\n\n"
-          f"Uptime Monitor"
-    )
+            "Your monitor has been detected as DOWN.\n\n"
+            f"Monitor: {monitor.name}\n"
+            f"URL: {monitor.url}\n\n"
+            f"Detected at: {timezone.now()}\n\n"
+            "Our monitoring system will continue checking the endpoint and "
+            "notify you once it recovers.\n\n"
+            "Uptime Monitor"
+        )
     else:
-        return 
-        
-    
+        return
+
     send_mail(
         subject=subject,
         message=message,
-        from_email="alerts@uptimemonitor.com",
+        from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[monitor.owner.email],
-        fail_silently=False
-
+        fail_silently=False,
     )
-    
-
-
-
