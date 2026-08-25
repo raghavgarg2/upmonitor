@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'accounts',
-    'monitors'
+    'monitors',
+    'django_celery_beat'
 ]
 
 MIDDLEWARE = [
@@ -134,3 +135,17 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
 }
+
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+
+
+CELERY_BEAT_SCHEDULE = {
+    "check-due-monitors": {
+        "task": "monitors.tasks.check_due_monitors",
+        "schedule": 10.0,
+    }
+}
+
+EMAIL_BACKEND = (
+    "django.core.mail.backends.console.EmailBackend"
+)

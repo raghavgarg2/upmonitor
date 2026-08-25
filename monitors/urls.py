@@ -11,4 +11,5 @@ router.register(
     basename="monitor"
 )
 
+
 urlpatterns = router.urls
