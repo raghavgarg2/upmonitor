@@ -5,6 +5,8 @@ from .models import Monitor
 from .services import process_monitor
 from django.utils import timezone
 from django.core.mail import send_mail
+from django.db.models import Q
+
 
 @shared_task
 def test_tast():
@@ -20,9 +22,8 @@ def process_monitor_task(monitor_id):
 
 @shared_task
 def check_due_monitors():
-    monitors = Monitor.objects.filter(
-        is_active = True,
-        next_check_at__lte = timezone.now()
+    monitors = Monitor.objects.filter(is_active=True).filter(
+        Q(next_check_at__isnull=True) | Q(next_check_at__lte=timezone.now())
     )
 
     for monitor in monitors:
@@ -82,7 +83,6 @@ def send_email(monitor_id,event):
 
     )
     
-
 
 
 
