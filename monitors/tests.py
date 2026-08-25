@@ -2,6 +2,8 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
+from rest_framework.test import APITestCase
 
 from .models import Incident, Monitor
 from .services import process_monitor
@@ -59,3 +61,49 @@ class MonitorLifecycleTests(TestCase):
         self.assertTrue(incident.is_resolved)
         self.assertIsNotNone(incident.resolved_at)
         email_alerts.assert_called_once_with(self.monitor, "RECOVERED")
+
+
+class MonitorApiTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner")
+        self.other_user = User.objects.create_user(username="other-user")
+        self.monitor = Monitor.objects.create(
+            owner=self.owner,
+            name="API monitor",
+            url="https://example.com",
+            is_currently_up=False,
+            last_response_time_ms=250,
+            last_checked_at=timezone.now(),
+        )
+        self.owner_incident = Incident.objects.create(
+            monitor=self.monitor,
+            started_at=timezone.now(),
+        )
+        other_monitor = Monitor.objects.create(
+            owner=self.other_user,
+            name="Private monitor",
+            url="https://example.org",
+        )
+        Incident.objects.create(monitor=other_monitor, started_at=timezone.now())
+
+    def test_monitor_list_includes_current_status(self):
+        self.client.force_authenticate(self.owner)
+
+        response = self.client.get("/api/monitors/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        monitor = response.data[0]
+        self.assertFalse(monitor["is_currently_up"])
+        self.assertEqual(monitor["last_response_time_ms"], 250)
+        self.assertIn("last_checked_at", monitor)
+
+    def test_incidents_are_limited_to_the_authenticated_user(self):
+        self.client.force_authenticate(self.owner)
+
+        response = self.client.get("/api/incidents/?is_resolved=false")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.owner_incident.id)
+        self.assertEqual(response.data[0]["monitor_name"], "API monitor")
